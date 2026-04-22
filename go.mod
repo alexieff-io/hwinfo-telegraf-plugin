@@ -1,4 +1,4 @@
-module github.com/zachstence/hwinfo-telegraf-plugin
+module github.com/alexieff-io/hwinfo-telegraf-plugin
 
 go 1.19
 

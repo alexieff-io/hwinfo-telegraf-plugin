@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	_ "github.com/zachstence/hwinfo-telegraf-plugin/plugins/inputs/hwinfo"
+	_ "github.com/alexieff-io/hwinfo-telegraf-plugin/plugins/inputs/hwinfo"
 )
 
 var pollInterval = flag.Duration("poll_interval", 1*time.Second, "how often to send metrics")

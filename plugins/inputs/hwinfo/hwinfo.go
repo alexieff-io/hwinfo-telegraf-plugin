@@ -12,7 +12,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/rs/zerolog/log"
 
-	shmem "github.com/zachstence/hwinfo-telegraf-plugin/plugins/inputs/hwinfo/hwinfoShMem"
+	shmem "github.com/alexieff-io/hwinfo-telegraf-plugin/plugins/inputs/hwinfo/hwinfoShMem"
 )
 
 // ============================================================================
@@ -90,7 +90,7 @@ func PluginVersion() string {
 		return "unknown"
 	}
 
-	i := slices.IndexFunc(bi.Deps, func(module *debug.Module) bool { return module.Path == "github.com/zachstence/hwinfo-telegraf-plugin" })
+	i := slices.IndexFunc(bi.Deps, func(module *debug.Module) bool { return module.Path == "github.com/alexieff-io/hwinfo-telegraf-plugin" })
 	if i == -1 {
 		return "unknown"
 	}

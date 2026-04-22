@@ -23,14 +23,14 @@ This [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) plugi
 
 ## Installation
 ### Download `.exe`
-Simply download `hwinfo-telegraf-plugin.exe` from the [latest release](https://github.com/zachstence/hwinfo-telegraf-plugin/releases).
+Simply download `hwinfo-telegraf-plugin.exe` from the [latest release](https://github.com/alexieff-io/hwinfo-telegraf-plugin/releases).
 
 ### Build From Source
 *These instructions assume you have Go installed and configured on your machine*
 
 Clone the repository
 ```sh
-git clone https://github.com/zachstence/hwinfo-telegraf-plugin
+git clone https://github.com/alexieff-io/hwinfo-telegraf-plugin
 cd hwinfo-telegraf-plugin
 ```
 
@@ -67,7 +67,7 @@ At this time, no configuration options are available. If you have a need for one
 ## Metrics
 Each measurement includes one of the available fields. The sensors that are reported depend on the hardware and its available sensors.
 
-Possible values for `_field` are dictated by the `Reading.ReadingType().String()` function defined [here](https://github.com/zachstence/hwinfo-telegraf-plugin/blob/6234ce0cd78a46c291b40f963a48c13296580d5c/plugins/inputs/hwinfo/internal/reading.go#L39).
+Possible values for `_field` are dictated by the `ReadingType.String()` function defined in [`reading.go`](https://github.com/alexieff-io/hwinfo-telegraf-plugin/blob/main/plugins/inputs/hwinfo/hwinfoShMem/reading.go).
 
 ### Types
 - hwinfo
@@ -387,6 +387,8 @@ hwinfo,readingId=134217728,readingName=Total\ Errors,readingNameOrig=Total\ Erro
 Coming soon!
 
 ## Credits
+This plugin is a fork of [hwinfo-telegraf-plugin](https://github.com/zachstence/hwinfo-telegraf-plugin) by [@zachstence](https://github.com/zachstence), maintained here with updated dependencies and fixes.
+
 [HWiNFO](https://www.hwinfo.com/) is a fantastic tool for monitoring hardware on a windows system. It covers more hardware and sensors than anything else I know of, and the author [@malikm](https://github.com/malikm) is actively developing it. You can purchase a Pro license [here](https://www.hwinfo.com/licenses/).
 
 Both the inspiration for and foundation of this project came from [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck), a plugin for the Elgato StreamDeck that shows sensor readings from HWiNFO.
