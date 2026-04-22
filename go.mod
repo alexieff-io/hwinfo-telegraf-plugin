@@ -39,7 +39,6 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/abdfnx/gosh v0.4.0
 	github.com/alecthomas/participle v0.4.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
@@ -51,12 +50,11 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
-	github.com/rs/zerolog v1.28.0
 	github.com/sleepinggenius2/gosmi v0.4.4 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
-	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

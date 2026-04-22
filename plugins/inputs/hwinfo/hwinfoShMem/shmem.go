@@ -4,11 +4,16 @@ package hwinfoShMem
 import "C"
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/hidez8891/shm"
-	"github.com/rs/zerolog/log"
 )
+
+// ErrAccessDenied is returned when Windows denies access to the HWiNFO
+// shared memory region. Typically means the plugin isn't running as
+// Administrator.
+var ErrAccessDenied = errors.New("access denied opening HWiNFO shared memory; is the plugin running as Administrator?")
 
 type HWiNFOShMem struct {
 	header   *Header
@@ -17,8 +22,9 @@ type HWiNFOShMem struct {
 }
 
 func Read() (*HWiNFOShMem, error) {
-	// Lock mutex and unlock after we are done reading
-	LockMutex()
+	if err := LockMutex(); err != nil {
+		return nil, err
+	}
 	defer UnlockMutex()
 
 	header, err := ReadHeader()
@@ -36,99 +42,87 @@ func Read() (*HWiNFOShMem, error) {
 		return nil, err
 	}
 
-	shmem := &HWiNFOShMem{header, sensors, readings}
-	return shmem, nil
+	return &HWiNFOShMem{header: header, sensors: sensors, readings: readings}, nil
 }
 
 func ReadHeader() (*Header, error) {
-	log.Debug().Msgf("Reading shared memory header")
-
 	bytes, err := readSharedMemory(0, headerLength)
 	if err != nil {
 		return nil, err
 	}
-
 	header := NewHeader(bytes)
 	return &header, nil
 }
 
 func ReadSensors(header *Header) ([]Sensor, error) {
 	offset := header.OffsetOfSensorSection()
-	numSensors := header.NumSensorElements()
-	length := numSensors * header.SizeOfSensorElement()
-	log.Debug().Msgf("Reading %d sensors (%d bytes)", numSensors, length)
+	num := header.NumSensorElements()
+	size := header.SizeOfSensorElement()
 
-	bytes, err := readSharedMemory(offset, length)
+	bytes, err := readSharedMemory(offset, num*size)
 	if err != nil {
 		return nil, err
 	}
 
-	var sensors []Sensor
-	for i := 0; i < numSensors; i++ {
-		start := i * header.SizeOfSensorElement()
-		end := start + header.SizeOfSensorElement()
-		sensor := NewSensor(bytes[start:end])
-		sensors = append(sensors, sensor)
+	sensors := make([]Sensor, 0, num)
+	for i := 0; i < num; i++ {
+		start := i * size
+		sensors = append(sensors, NewSensor(bytes[start:start+size]))
 	}
-
 	return sensors, nil
 }
 
 func ReadReadings(header *Header) ([]Reading, error) {
 	offset := header.OffsetOfReadingSection()
-	numReadings := header.NumReadingElements()
-	length := numReadings * header.SizeOfReadingElement()
-	log.Debug().Msgf("Reading %d readings (%d bytes)", numReadings, length)
+	num := header.NumReadingElements()
+	size := header.SizeOfReadingElement()
 
-	bytes, err := readSharedMemory(offset, length)
+	bytes, err := readSharedMemory(offset, num*size)
 	if err != nil {
 		return nil, err
 	}
 
-	var readings []Reading
-	for i := 0; i < numReadings; i++ {
-		start := i * header.SizeOfReadingElement()
-		end := start + header.SizeOfReadingElement()
-		reading := NewReading(bytes[start:end])
-		readings = append(readings, reading)
+	readings := make([]Reading, 0, num)
+	for i := 0; i < num; i++ {
+		start := i * size
+		readings = append(readings, NewReading(bytes[start:start+size]))
 	}
-
 	return readings, nil
 }
 
 func isAccessDeniedErr(err error) bool {
-	errStr := fmt.Sprintf("%v", err)
-	return errStr == "CreateFileMapping: Access is denied."
+	return fmt.Sprintf("%v", err) == "CreateFileMapping: Access is denied."
 }
 
-func readSharedMemory(start int, size int) ([]byte, error) {
+func readSharedMemory(start, size int) ([]byte, error) {
 	memory, err := shm.Open(C.HWiNFO_SENSORS_MAP_FILE_NAME2, int32(size))
 	if err != nil {
 		if isAccessDeniedErr(err) {
-			log.Fatal().Err(err).Msg("could not access HWiNFO shared memory, is this plugin running as Administrator?")
+			return nil, ErrAccessDenied
 		}
 		return nil, err
 	}
+	defer memory.Close()
 
 	bytes := make([]byte, size)
-	memory.ReadAt(bytes, int64(start))
-	memory.Close()
-
+	if _, err := memory.ReadAt(bytes, int64(start)); err != nil {
+		return nil, fmt.Errorf("read shared memory at offset %d: %w", start, err)
+	}
 	return bytes, nil
 }
 
-func (shmem *HWiNFOShMem) Version() string {
-	return fmt.Sprintf("v%d rev%d", shmem.header.Version(), shmem.header.Revision())
+func (s *HWiNFOShMem) Version() string {
+	return fmt.Sprintf("v%d rev%d", s.header.Version(), s.header.Revision())
 }
 
-func (shmem *HWiNFOShMem) Header() *Header {
-	return shmem.header
+func (s *HWiNFOShMem) Header() *Header {
+	return s.header
 }
 
-func (shmem *HWiNFOShMem) Sensors() []Sensor {
-	return shmem.sensors
+func (s *HWiNFOShMem) Sensors() []Sensor {
+	return s.sensors
 }
 
-func (shmem *HWiNFOShMem) Readings() []Reading {
-	return shmem.readings
+func (s *HWiNFOShMem) Readings() []Reading {
+	return s.readings
 }

@@ -2,16 +2,15 @@ package hwinfo
 
 import (
 	_ "embed"
+	"fmt"
+	"os/exec"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"github.com/abdfnx/gosh"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/rs/zerolog/log"
 
 	shmem "github.com/alexieff-io/hwinfo-telegraf-plugin/plugins/inputs/hwinfo/hwinfoShMem"
 )
@@ -19,11 +18,9 @@ import (
 //go:embed sample.conf
 var sampleConfig string
 
-// ============================================================================
-// Public input plugin interface
-// ============================================================================
-
 type HWiNFOInputPlugin struct {
+	Log telegraf.Logger `toml:"-"`
+
 	hwinfoVersion string
 	pluginVersion string
 	shmemVersion  string
@@ -32,71 +29,70 @@ type HWiNFOInputPlugin struct {
 func init() {
 	inputs.Add("hwinfo", func() telegraf.Input {
 		return &HWiNFOInputPlugin{
-			hwinfoVersion: HWiNFOVersion(),
 			pluginVersion: PluginVersion(),
 		}
 	})
-}
-
-func (input *HWiNFOInputPlugin) Init() error {
-	return nil
-}
-
-func (input *HWiNFOInputPlugin) Stop() {
-	shmem.UnlockMutex()
 }
 
 func (input *HWiNFOInputPlugin) SampleConfig() string {
 	return sampleConfig
 }
 
+func (input *HWiNFOInputPlugin) Init() error {
+	input.hwinfoVersion = queryHWiNFOVersion(input.Log)
+	return nil
+}
+
 func (input *HWiNFOInputPlugin) Gather(a telegraf.Accumulator) error {
-	log.Debug().Msg("Gathering metrics...")
+	data, err := input.gather()
+	if err != nil {
+		return fmt.Errorf("gather from HWiNFO shared memory: %w", err)
+	}
 
-	// Gather data
-	data := input.gather()
-
-	// Convert raw data to telegraf fields/tags
-	log.Debug().Msg("Converting metrics...")
 	writeCount := 0
 	for _, datum := range data {
-		metrics := input.buildFieldsAndTags(datum)
-		for _, metric := range metrics {
+		for _, metric := range input.buildFieldsAndTags(datum) {
 			a.AddFields("hwinfo", metric.fields, metric.tags)
 			writeCount++
 		}
 	}
-	log.Debug().Msgf("Wrote %d metrics", writeCount)
-
-	log.Debug().Msg("Done gathering metrics")
+	if input.Log != nil {
+		input.Log.Debugf("wrote %d metrics from %d sensors", writeCount, len(data))
+	}
 	return nil
 }
 
-func HWiNFOVersion() string {
-	err, out, errout := gosh.PowershellOutput("(Get-Process HWiNFO64 | Select-Object Path | Get-Item).VersionInfo.ProductVersion")
+// queryHWiNFOVersion queries the running HWiNFO64 process for its version
+// string via PowerShell. Returns "unknown" if HWiNFO isn't running or the
+// query fails for any reason.
+func queryHWiNFOVersion(l telegraf.Logger) string {
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"(Get-Process HWiNFO64 | Select-Object Path | Get-Item).VersionInfo.ProductVersion")
+	out, err := cmd.Output()
 	if err != nil {
-		log.Debug().Msgf("Failed to query version of HWiNFO64 process: %v, %s", err, errout)
+		if l != nil {
+			l.Debugf("failed to query HWiNFO64 version: %v", err)
+		}
 		return "unknown"
 	}
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(string(out))
 }
 
+// PluginVersion returns the module version embedded in the binary's build
+// info, or "unknown" if it can't be resolved.
 func PluginVersion() string {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
-
-	i := slices.IndexFunc(bi.Deps, func(module *debug.Module) bool { return module.Path == "github.com/alexieff-io/hwinfo-telegraf-plugin" })
+	i := slices.IndexFunc(bi.Deps, func(m *debug.Module) bool {
+		return m.Path == "github.com/alexieff-io/hwinfo-telegraf-plugin"
+	})
 	if i == -1 {
 		return "unknown"
 	}
 	return bi.Deps[i].Version
 }
-
-// ============================================================================
-// Private helpers
-// ============================================================================
 
 type Metric struct {
 	fields map[string]interface{}
@@ -108,57 +104,45 @@ type SensorReadings struct {
 	readings []shmem.Reading
 }
 
-func (input *HWiNFOInputPlugin) gather() []SensorReadings {
+func (input *HWiNFOInputPlugin) gather() ([]SensorReadings, error) {
 	rawData, err := shmem.Read()
 	if err != nil {
-		log.Fatal().Err(err).Send()
+		return nil, err
 	}
 	input.shmemVersion = rawData.Version()
 
-	data := []SensorReadings{}
-
-	// Get sensors
-	for _, s := range rawData.Sensors() {
-		data = append(data, SensorReadings{
-			sensor:   s,
-			readings: []shmem.Reading{},
-		})
+	sensors := rawData.Sensors()
+	data := make([]SensorReadings, 0, len(sensors))
+	for _, s := range sensors {
+		data = append(data, SensorReadings{sensor: s})
 	}
-	log.Debug().Msgf("Processed %d sensors", rawData.Header().NumSensorElements())
 
-	// Get readings
 	for _, r := range rawData.Readings() {
 		sensorIndex := int(r.SensorIndex())
 		if sensorIndex >= len(data) {
-			log.Error().Msgf("sensor index out of range, attempting to access index %d, but %d sensors found ", sensorIndex, len(data))
+			if input.Log != nil {
+				input.Log.Errorf("sensor index out of range: reading references sensor %d, but only %d sensors exist", sensorIndex, len(data))
+			}
 			continue
 		}
-
 		data[sensorIndex].readings = append(data[sensorIndex].readings, r)
 	}
-	log.Debug().Msgf("Processed %d readings", rawData.Header().NumReadingElements())
 
-	return data
+	return data, nil
 }
 
-func (hwinfo *HWiNFOInputPlugin) buildFieldsAndTags(sensorReadings SensorReadings) []Metric {
-	metrics := []Metric{}
+func (input *HWiNFOInputPlugin) buildFieldsAndTags(sr SensorReadings) []Metric {
+	sensor := sr.sensor
+	metrics := make([]Metric, 0, len(sr.readings))
 
-	sensor := sensorReadings.sensor
-	readings := sensorReadings.readings
-
-	for _, reading := range readings {
-		readingType := reading.Type().String()
-		readingValue := reading.Value()
-
+	for _, reading := range sr.readings {
 		fields := map[string]interface{}{
-			(readingType): readingValue,
+			reading.Type().String(): reading.Value(),
 		}
-
 		tags := map[string]string{
-			"hwinfoVersion": hwinfo.hwinfoVersion,
-			"pluginVersion": hwinfo.pluginVersion,
-			"shmemVersion":  hwinfo.shmemVersion,
+			"hwinfoVersion": input.hwinfoVersion,
+			"pluginVersion": input.pluginVersion,
+			"shmemVersion":  input.shmemVersion,
 
 			"sensorId":       sensor.ID(),
 			"sensorInst":     strconv.FormatUint(sensor.SensorInst(), 10),
@@ -171,12 +155,7 @@ func (hwinfo *HWiNFOInputPlugin) buildFieldsAndTags(sensorReadings SensorReading
 			"readingName":     reading.LabelUser(),
 			"unit":            reading.Unit(),
 		}
-
-		metrics = append(metrics, Metric{
-			fields: fields,
-			tags:   tags,
-		})
+		metrics = append(metrics, Metric{fields: fields, tags: tags})
 	}
-
 	return metrics
 }
