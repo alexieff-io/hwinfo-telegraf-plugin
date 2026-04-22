@@ -1,50 +1,62 @@
 module github.com/alexieff-io/hwinfo-telegraf-plugin
 
-go 1.22
+go 1.26
+
+toolchain go1.26.2
 
 require (
 	github.com/hidez8891/shm v0.0.0-20200313135933-0ec4df5f28c7
-	github.com/influxdata/telegraf v1.23.4
-	golang.org/x/text v0.3.7
+	github.com/influxdata/telegraf v1.38.3
+	golang.org/x/text v0.36.0
 )
 
 require (
-	collectd.org v0.5.0 // indirect
-	github.com/BurntSushi/toml v1.2.0 // indirect
+	cel.dev/expr v0.25.1 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/awnumar/memcall v0.4.0 // indirect
+	github.com/awnumar/memguard v0.23.0 // indirect
+	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/compose-spec/compose-go v1.20.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/google/cel-go v0.28.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/jedib0t/go-pretty/v6 v6.7.9 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
+	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/klauspost/pgzip v1.2.6 // indirect
+	github.com/mattn/go-runewidth v0.0.21 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/sirupsen/logrus v1.9.4 // indirect
+	github.com/tidwall/tinylru v1.2.1 // indirect
+	github.com/tidwall/wal v1.2.1 // indirect
+	go.step.sm/crypto v0.77.2 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
+	gotest.tools/v3 v3.5.1 // indirect
+)
+
+require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/abdfnx/gosh v0.4.0
 	github.com/alecthomas/participle v0.4.1 // indirect
-	github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15 // indirect
-	github.com/benbjohnson/clock v1.3.0 // indirect
-	github.com/caio/go-tdigest v3.1.0+incompatible // indirect
-	github.com/coreos/go-semver v0.3.0 // indirect
-	github.com/fatih/color v1.13.0 // indirect
-	github.com/go-logfmt/logfmt v0.5.1 // indirect
+	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
+	github.com/benbjohnson/clock v1.3.5 // indirect
+	github.com/coreos/go-semver v0.3.1 // indirect
+	github.com/fatih/color v1.19.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/golang/snappy v0.0.4 // indirect
-	github.com/gosnmp/gosnmp v1.34.0 // indirect
-	github.com/influxdata/line-protocol/v2 v2.2.1 // indirect
-	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
+	github.com/gosnmp/gosnmp v1.43.2 // indirect
+	github.com/influxdata/toml v0.0.0-20251106153700-c381e153d076 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
-	github.com/philhofer/fwd v1.1.1 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.37.0 // indirect
-	github.com/prometheus/prometheus v1.8.2-0.20210430082741-2a4b8e12bbf2 // indirect
 	github.com/rs/zerolog v1.28.0
 	github.com/sleepinggenius2/gosmi v0.4.4 // indirect
-	github.com/tidwall/gjson v1.14.1 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tinylib/msgp v1.1.6 // indirect
-	github.com/vjeantet/grok v1.0.1 // indirect
-	github.com/wavefronthq/wavefront-sdk-go v0.9.11 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
-	golang.org/x/sys v0.1.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
+	golang.org/x/sys v0.43.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )

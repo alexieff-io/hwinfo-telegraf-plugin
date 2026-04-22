@@ -1,6 +1,7 @@
 package hwinfo
 
 import (
+	_ "embed"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -14,6 +15,9 @@ import (
 
 	shmem "github.com/alexieff-io/hwinfo-telegraf-plugin/plugins/inputs/hwinfo/hwinfoShMem"
 )
+
+//go:embed sample.conf
+var sampleConfig string
 
 // ============================================================================
 // Public input plugin interface
@@ -43,14 +47,7 @@ func (input *HWiNFOInputPlugin) Stop() {
 }
 
 func (input *HWiNFOInputPlugin) SampleConfig() string {
-	return `
-[[inputs.hwinfo]]
-	# no config
-`
-}
-
-func (input *HWiNFOInputPlugin) Description() string {
-	return "Gather Windows system hardware information from HWiNFO"
+	return sampleConfig
 }
 
 func (input *HWiNFOInputPlugin) Gather(a telegraf.Accumulator) error {
