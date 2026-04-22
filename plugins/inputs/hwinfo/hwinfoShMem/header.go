@@ -69,3 +69,9 @@ func (header *Header) SizeOfReadingElement() int {
 func (header *Header) NumReadingElements() int {
 	return int(header.c.dwNumReadingElements)
 }
+
+// TotalSize is the total byte length of the HWiNFO shared memory region:
+// header + sensor section + reading section.
+func (header *Header) TotalSize() int {
+	return header.OffsetOfReadingSection() + header.NumReadingElements()*header.SizeOfReadingElement()
+}
