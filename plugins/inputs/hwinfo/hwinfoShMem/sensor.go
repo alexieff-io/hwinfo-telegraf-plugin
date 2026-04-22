@@ -1,19 +1,23 @@
 package hwinfoShMem
 
-// #include "hwisenssm2.h"
-import "C"
-
 import (
+	"encoding/binary"
 	"fmt"
-	"unsafe"
 )
 
-// Sensor element (e.g. motherboard, cpu, gpu...)
+// Sensor is a parsed HWiNFO_SENSORS_SENSOR_ELEMENT.
+//
+// Field layout (#pragma pack(1), little-endian):
+//
+//	offset   0  dwSensorID         DWORD    (4 bytes)
+//	offset   4  dwSensorInst       DWORD    (4 bytes)
+//	offset   8  szSensorNameOrig   char[128]
+//	offset 136  szSensorNameUser   char[128]
 type Sensor struct {
-	cs C.PHWiNFO_SENSORS_SENSOR_ELEMENT
+	data []byte
 }
 
-// Type of sensor (the kind of hardware, i.e. cpu, gpu, drive)
+// SensorType identifies the kind of hardware a sensor represents.
 type SensorType string
 
 const (
@@ -28,21 +32,21 @@ const (
 	Unknown       SensorType = "unknown"
 )
 
-// NewSensor constructs a Sensor
+// NewSensor wraps the given byte slice as a Sensor. The slice must be at
+// least sensorSize bytes.
 func NewSensor(data []byte) Sensor {
-	return Sensor{
-		cs: C.PHWiNFO_SENSORS_SENSOR_ELEMENT(unsafe.Pointer(&data[0])),
-	}
+	return Sensor{data: data}
 }
 
-// SensorID a unique Sensor ID
+// SensorID returns the sensor's unique ID within HWiNFO.
 func (s *Sensor) SensorID() uint64 {
-	return uint64(s.cs.dwSensorID)
+	return uint64(binary.LittleEndian.Uint32(s.data[0:4]))
 }
 
-// SensorInst the instance of the sensor (together with SensorID forms a unique ID)
+// SensorInst returns the sensor's instance number. Combined with SensorID
+// it uniquely identifies a sensor.
 func (s *Sensor) SensorInst() uint64 {
-	return uint64(s.cs.dwSensorInst)
+	return uint64(binary.LittleEndian.Uint32(s.data[4:8]))
 }
 
 // ID returns a unique identifier for this sensor combining SensorID and
@@ -53,38 +57,40 @@ func (s *Sensor) ID() string {
 	return fmt.Sprintf("%d-%d", s.SensorID(), s.SensorInst())
 }
 
-// NameOrig original name of sensor
+// NameOrig returns the original sensor name as assigned by HWiNFO.
 func (s *Sensor) NameOrig() string {
-	return DecodeCharPtr(unsafe.Pointer(&s.cs.szSensorNameOrig), C.HWiNFO_SENSORS_STRING_LEN2)
+	return decodeCString(s.data[8 : 8+stringLen])
 }
 
-// NameUser sensor name displayed, which might have been renamed by user
+// NameUser returns the displayed sensor name, which may have been renamed
+// by the user in HWiNFO's settings.
 func (s *Sensor) NameUser() string {
-	return DecodeCharPtr(unsafe.Pointer(&s.cs.szSensorNameUser), C.HWiNFO_SENSORS_STRING_LEN2)
+	return decodeCString(s.data[8+stringLen : 8+2*stringLen])
 }
 
-// TODO I wish there was a better way to do this, ideally something provided explicitly bw HWiNFO
-// A dynamic value computed by looking at other fields of the sensor
+// SensorType classifies the sensor by matching its original name prefix.
+// HWiNFO does not expose sensor type directly, so this uses best-effort
+// string matching.
 func (s *Sensor) SensorType() SensorType {
 	name := s.NameOrig()
-
-	if StartsWithLower(name, "system") {
+	switch {
+	case StartsWithLower(name, "system"):
 		return System
-	} else if StartsWithLower(name, "cpu") {
+	case StartsWithLower(name, "cpu"):
 		return CPU
-	} else if StartsWithLower(name, "s.m.a.r.t.") {
+	case StartsWithLower(name, "s.m.a.r.t."):
 		return SMART
-	} else if StartsWithLower(name, "drive") {
+	case StartsWithLower(name, "drive"):
 		return Drive
-	} else if StartsWithLower(name, "gpu") {
+	case StartsWithLower(name, "gpu"):
 		return GPU
-	} else if StartsWithLower(name, "network") {
+	case StartsWithLower(name, "network"):
 		return Network
-	} else if StartsWithLower(name, "windows") {
+	case StartsWithLower(name, "windows"):
 		return Windows
-	} else if StartsWithLower(name, "memory timings") {
+	case StartsWithLower(name, "memory timings"):
 		return MemoryTimings
-	} else {
+	default:
 		return Unknown
 	}
 }

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     name: Test and build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -24,11 +24,25 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
-      - name: go vet
+      - name: go vet (linux)
         run: go vet ./...
 
-      - name: go test
-        run: go test -v ./...
+      - name: go vet (windows cross)
+        env:
+          GOOS: windows
+          GOARCH: amd64
+        # -unsafeptr=false: shmem_windows.go converts a uintptr returned by
+        # MapViewOfFile into *byte to build a slice over mapped memory. The
+        # target is kernel-managed, not Go-heap, so the unsafeptr warning is
+        # a false positive for this pattern.
+        run: go vet -unsafeptr=false ./...
 
-      - name: go build
+      - name: go test (with race detector)
+        run: go test -v -race ./...
+
+      - name: build windows/amd64
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
         run: go build -v -o hwinfo-telegraf-plugin.exe ./cmd

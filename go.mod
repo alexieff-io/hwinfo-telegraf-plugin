@@ -5,8 +5,8 @@ go 1.26
 toolchain go1.26.2
 
 require (
-	github.com/hidez8891/shm v0.0.0-20200313135933-0ec4df5f28c7
 	github.com/influxdata/telegraf v1.38.3
+	golang.org/x/sys v0.43.0
 	golang.org/x/text v0.36.0
 )
 
@@ -55,6 +55,5 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
-	golang.org/x/sys v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

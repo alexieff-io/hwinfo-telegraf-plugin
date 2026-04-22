@@ -1,77 +1,87 @@
 package hwinfoShMem
 
-// #include "hwisenssm2.h"
-import "C"
+import "encoding/binary"
 
-import (
-	"unsafe"
-)
-
-const headerLength = C.sizeof_HWiNFO_SENSORS_SHARED_MEM2
-
+// Header is a parsed HWiNFO_SENSORS_SHARED_MEM2 structure. All accessors
+// read directly from the backing byte slice; no copying is performed.
+//
+// Field layout (#pragma pack(1), little-endian):
+//
+//	offset  0  dwSignature              DWORD      (4 bytes, ASCII "HWiS"/"DEAD")
+//	offset  4  dwVersion                DWORD      (4 bytes)
+//	offset  8  dwRevision               DWORD      (4 bytes)
+//	offset 12  poll_time                __time64_t (8 bytes)
+//	offset 20  dwOffsetOfSensorSection  DWORD      (4 bytes)
+//	offset 24  dwSizeOfSensorElement    DWORD      (4 bytes)
+//	offset 28  dwNumSensorElements      DWORD      (4 bytes)
+//	offset 32  dwOffsetOfReadingSection DWORD      (4 bytes)
+//	offset 36  dwSizeOfReadingElement   DWORD      (4 bytes)
+//	offset 40  dwNumReadingElements     DWORD      (4 bytes)
 type Header struct {
-	c C.PHWiNFO_SENSORS_SHARED_MEM2
+	data []byte
 }
 
+// NewHeader wraps the given byte slice as a Header. The slice must be at
+// least headerLength bytes; accessor calls will panic otherwise.
 func NewHeader(data []byte) Header {
-	return Header{
-		c: C.PHWiNFO_SENSORS_SHARED_MEM2(unsafe.Pointer(&data[0])),
-	}
+	return Header{data: data}
 }
 
-// Signature "HWiS" if active, 'DEAD' when inactive
-func (header *Header) Signature() string {
-	return DecodeCharPtr(unsafe.Pointer(&header.c.dwSignature), C.sizeof_DWORD)
+// Signature returns the 4-byte ASCII signature: "HWiS" when HWiNFO is
+// actively publishing or "DEAD" when it has shut down.
+func (h *Header) Signature() string {
+	return decodeCString(h.data[0:4])
 }
 
-// Version version of shared memory
-func (header *Header) Version() int {
-	return int(header.c.dwVersion)
+// Version returns the shared memory protocol version.
+func (h *Header) Version() int {
+	return int(binary.LittleEndian.Uint32(h.data[4:8]))
 }
 
-// Revision revision of version
-func (header *Header) Revision() int {
-	return int(header.c.dwRevision)
+// Revision returns the shared memory protocol revision.
+func (h *Header) Revision() int {
+	return int(binary.LittleEndian.Uint32(h.data[8:12]))
 }
 
-// PollTime last polling time
-func (header *Header) PollTime() uint64 {
-	addr := unsafe.Pointer(uintptr(unsafe.Pointer(&header.c.dwRevision)) + C.sizeof_DWORD)
-	return uint64(*(*C.__time64_t)(addr))
+// PollTime returns HWiNFO's last polling time as a raw __time64_t value
+// (seconds since Unix epoch).
+func (h *Header) PollTime() uint64 {
+	return binary.LittleEndian.Uint64(h.data[12:20])
 }
 
-// OffsetOfSensorSection offset of the Sensor section from beginning of HWiNFO_SENSORS_SHARED_MEM2
-func (header *Header) OffsetOfSensorSection() int {
-	return int(header.c.dwOffsetOfSensorSection)
+// OffsetOfSensorSection returns the byte offset of the sensor array from the
+// start of the shared memory region.
+func (h *Header) OffsetOfSensorSection() int {
+	return int(binary.LittleEndian.Uint32(h.data[20:24]))
 }
 
-// SizeOfSensorElement size of each sensor element = sizeof( HWiNFO_SENSORS_SENSOR_ELEMENT )
-func (header *Header) SizeOfSensorElement() int {
-	return int(header.c.dwSizeOfSensorElement)
+// SizeOfSensorElement returns the size of a single sensor element in bytes.
+func (h *Header) SizeOfSensorElement() int {
+	return int(binary.LittleEndian.Uint32(h.data[24:28]))
 }
 
-// NumSensorElements number of sensor elements
-func (header *Header) NumSensorElements() int {
-	return int(header.c.dwNumSensorElements)
+// NumSensorElements returns the number of sensors in the sensor array.
+func (h *Header) NumSensorElements() int {
+	return int(binary.LittleEndian.Uint32(h.data[28:32]))
 }
 
-// OffsetOfReadingSection offset of the Reading section from beginning of HWiNFO_SENSORS_SHARED_MEM2
-func (header *Header) OffsetOfReadingSection() int {
-	return int(header.c.dwOffsetOfReadingSection)
+// OffsetOfReadingSection returns the byte offset of the reading array.
+func (h *Header) OffsetOfReadingSection() int {
+	return int(binary.LittleEndian.Uint32(h.data[32:36]))
 }
 
-// SizeOfReadingElement size of each Reading element = sizeof( HWiNFO_SENSORS_READING_ELEMENT )
-func (header *Header) SizeOfReadingElement() int {
-	return int(header.c.dwSizeOfReadingElement)
+// SizeOfReadingElement returns the size of a single reading element in bytes.
+func (h *Header) SizeOfReadingElement() int {
+	return int(binary.LittleEndian.Uint32(h.data[36:40]))
 }
 
-// NumReadingElements number of Reading elements
-func (header *Header) NumReadingElements() int {
-	return int(header.c.dwNumReadingElements)
+// NumReadingElements returns the number of readings in the reading array.
+func (h *Header) NumReadingElements() int {
+	return int(binary.LittleEndian.Uint32(h.data[40:44]))
 }
 
 // TotalSize is the total byte length of the HWiNFO shared memory region:
 // header + sensor section + reading section.
-func (header *Header) TotalSize() int {
-	return header.OffsetOfReadingSection() + header.NumReadingElements()*header.SizeOfReadingElement()
+func (h *Header) TotalSize() int {
+	return h.OffsetOfReadingSection() + h.NumReadingElements()*h.SizeOfReadingElement()
 }

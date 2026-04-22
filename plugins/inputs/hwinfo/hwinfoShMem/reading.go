@@ -1,35 +1,22 @@
 package hwinfoShMem
 
-/*
-#include <windows.h>
-#include "hwisenssm2.h"
-*/
-import "C"
 import (
-	"unsafe"
+	"encoding/binary"
+	"math"
 )
 
-// ReadingType enum of value/unit type for reading
+// ReadingType is the enum describing what kind of value a Reading holds.
 type ReadingType int
 
 const (
-	// ReadingTypeNone no type
 	ReadingTypeNone ReadingType = iota
-	// ReadingTypeTemp temperature in celsius
 	ReadingTypeTemp
-	// ReadingTypeVolt voltage
 	ReadingTypeVolt
-	// ReadingTypeFan RPM
 	ReadingTypeFan
-	// ReadingTypeCurrent amps
 	ReadingTypeCurrent
-	// ReadingTypePower watts
 	ReadingTypePower
-	// ReadingTypeClock Mhz
 	ReadingTypeClock
-	// ReadingTypeUsage e.g. MBs
 	ReadingTypeUsage
-	// ReadingTypeOther other
 	ReadingTypeOther
 )
 
@@ -37,86 +24,102 @@ func (t ReadingType) String() string {
 	return [...]string{"none", "temp", "volt", "fan", "current", "power", "clock", "usage", "other"}[t]
 }
 
-// Reading element (e.g. usage, power, mhz...)
+// Reading is a parsed HWiNFO_SENSORS_READING_ELEMENT.
+//
+// Field layout (#pragma pack(1), little-endian):
+//
+//	offset   0  tReading        SENSOR_READING_TYPE (4-byte enum)
+//	offset   4  dwSensorIndex   DWORD               (4)
+//	offset   8  dwReadingID     DWORD               (4)
+//	offset  12  szLabelOrig     char[128]
+//	offset 140  szLabelUser     char[128]
+//	offset 268  szUnit          char[16]
+//	offset 284  Value           double              (8)
+//	offset 292  ValueMin        double              (8)
+//	offset 300  ValueMax        double              (8)
+//	offset 308  ValueAvg        double              (8)
 type Reading struct {
-	cr C.PHWiNFO_SENSORS_READING_ELEMENT
+	data []byte
 }
 
-// NewReading contructs a Reading
+// Byte offsets of the fields, derived from the struct layout above.
+const (
+	readingOffsetType        = 0
+	readingOffsetSensorIndex = 4
+	readingOffsetReadingID   = 8
+	readingOffsetLabelOrig   = 12
+	readingOffsetLabelUser   = readingOffsetLabelOrig + stringLen
+	readingOffsetUnit        = readingOffsetLabelUser + stringLen
+	readingOffsetValue       = readingOffsetUnit + unitLen
+	readingOffsetValueMin    = readingOffsetValue + 8
+	readingOffsetValueMax    = readingOffsetValueMin + 8
+	readingOffsetValueAvg    = readingOffsetValueMax + 8
+)
+
+// NewReading wraps the given byte slice as a Reading. The slice must be at
+// least readingSize bytes.
 func NewReading(data []byte) Reading {
-	return Reading{
-		cr: C.PHWiNFO_SENSORS_READING_ELEMENT(unsafe.Pointer(&data[0])),
-	}
+	return Reading{data: data}
 }
 
-// ID unique ID of the reading within a particular sensor
+// ID returns the reading's unique ID within its parent sensor. Retained as
+// int32 for backward compatibility; the underlying field is an unsigned DWORD.
 func (r *Reading) ID() int32 {
-	return int32(r.cr.dwReadingID)
+	return int32(binary.LittleEndian.Uint32(r.data[readingOffsetReadingID : readingOffsetReadingID+4]))
 }
 
-// Type of sensor reading
+// Type returns the reading's value category (temperature, voltage, etc).
 func (r *Reading) Type() ReadingType {
-	return ReadingType(r.cr.tReading)
+	return ReadingType(binary.LittleEndian.Uint32(r.data[readingOffsetType : readingOffsetType+4]))
 }
 
-// SensorIndex this is the index of sensor in the Sensors[] array to
-// which this reading belongs to
+// SensorIndex returns the index of the parent sensor within the Sensors
+// array.
 func (r *Reading) SensorIndex() uint64 {
-	return uint64(r.cr.dwSensorIndex)
+	return uint64(binary.LittleEndian.Uint32(r.data[readingOffsetSensorIndex : readingOffsetSensorIndex+4]))
 }
 
-// ReadingID a unique ID of the reading within a particular sensor
+// ReadingID is an alias for ID that preserves the wider return type.
 func (r *Reading) ReadingID() uint64 {
-	return uint64(r.cr.dwReadingID)
+	return uint64(binary.LittleEndian.Uint32(r.data[readingOffsetReadingID : readingOffsetReadingID+4]))
 }
 
-// LabelOrig original label (e.g. "Chassis2 Fan")
+// LabelOrig returns the original reading label as assigned by HWiNFO.
 func (r *Reading) LabelOrig() string {
-	return DecodeCharPtr(unsafe.Pointer(&r.cr.szLabelOrig), C.HWiNFO_SENSORS_STRING_LEN2)
+	return decodeCString(r.data[readingOffsetLabelOrig : readingOffsetLabelOrig+stringLen])
 }
 
-// LabelUser label displayed, which might have been renamed by user
+// LabelUser returns the displayed reading label, which may have been
+// renamed by the user.
 func (r *Reading) LabelUser() string {
-	return DecodeCharPtr(unsafe.Pointer(&r.cr.szLabelUser), C.HWiNFO_SENSORS_STRING_LEN2)
+	return decodeCString(r.data[readingOffsetLabelUser : readingOffsetLabelUser+stringLen])
 }
 
-// Unit e.g. "RPM"
+// Unit returns the reading's unit of measurement (e.g. "RPM", "°C").
 func (r *Reading) Unit() string {
-	return DecodeCharPtr(unsafe.Pointer(&r.cr.szUnit), C.HWiNFO_UNIT_STRING_LEN)
+	return decodeCString(r.data[readingOffsetUnit : readingOffsetUnit+unitLen])
 }
 
-func (r *Reading) valuePtr() unsafe.Pointer {
-	return unsafe.Pointer(uintptr(unsafe.Pointer(&r.cr.szUnit)) + C.HWiNFO_UNIT_STRING_LEN)
-}
-
-// Value current value
+// Value returns the current reading value.
 func (r *Reading) Value() float64 {
-	return float64(*(*C.double)(r.valuePtr()))
+	return r.readFloat64(readingOffsetValue)
 }
 
-func (r *Reading) valueMinPtr() unsafe.Pointer {
-	return unsafe.Pointer(uintptr(r.valuePtr()) + C.sizeof_double)
-}
-
-// ValueMin current value
+// ValueMin returns the minimum observed reading value since HWiNFO started.
 func (r *Reading) ValueMin() float64 {
-	return float64(*(*C.double)(r.valueMinPtr()))
+	return r.readFloat64(readingOffsetValueMin)
 }
 
-func (r *Reading) valueMaxPtr() unsafe.Pointer {
-	return unsafe.Pointer(uintptr(r.valueMinPtr()) + C.sizeof_double)
-}
-
-// ValueMax current value
+// ValueMax returns the maximum observed reading value since HWiNFO started.
 func (r *Reading) ValueMax() float64 {
-	return float64(*(*C.double)(r.valueMaxPtr()))
+	return r.readFloat64(readingOffsetValueMax)
 }
 
-func (r *Reading) valueAvgPtr() unsafe.Pointer {
-	return unsafe.Pointer(uintptr(r.valueMaxPtr()) + C.sizeof_double)
-}
-
-// ValueAvg current value
+// ValueAvg returns the average reading value since HWiNFO started.
 func (r *Reading) ValueAvg() float64 {
-	return float64(*(*C.double)(r.valueAvgPtr()))
+	return r.readFloat64(readingOffsetValueAvg)
+}
+
+func (r *Reading) readFloat64(offset int) float64 {
+	return math.Float64frombits(binary.LittleEndian.Uint64(r.data[offset : offset+8]))
 }

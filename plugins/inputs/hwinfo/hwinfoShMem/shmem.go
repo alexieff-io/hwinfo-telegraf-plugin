@@ -1,13 +1,8 @@
 package hwinfoShMem
 
-// #include "hwisenssm2.h"
-import "C"
-
 import (
 	"errors"
 	"fmt"
-
-	"github.com/hidez8891/shm"
 )
 
 // signatureActive marks an active HWiNFO shared memory region; anything else
@@ -30,41 +25,35 @@ func (e InactiveError) Error() string {
 	return fmt.Sprintf("HWiNFO shared memory is inactive: signature %q, want %q", e.Signature, signatureActive)
 }
 
+// HWiNFOShMem is a parsed snapshot of the HWiNFO shared memory region.
 type HWiNFOShMem struct {
 	header   *Header
 	sensors  []Sensor
 	readings []Reading
 }
 
-// Read takes the HWiNFO mutex, reads the full shared memory region, parses
-// sensors and readings, then releases the mutex. The mutex is held for the
-// minimum possible time per the HWiNFO SDK's "release as quick as possible"
-// contract.
-//
-// The region is opened twice: once with a header-sized bound to learn the
-// total size, then once with that total size to read sensors+readings in a
-// single shot. A truly-single open would require bypassing the shm library's
-// software-side bounds check on ReadAt.
+// Read takes the HWiNFO mutex, copies the full shared memory region into a
+// Go-owned buffer, releases the mutex, and parses sensors and readings. The
+// mutex is held only for the duration of the memory copy, per the HWiNFO
+// SDK's "release as quick as possible" contract.
 func Read() (*HWiNFOShMem, error) {
-	if err := LockMutex(); err != nil {
+	body, err := snapshotSharedMemory()
+	if err != nil {
 		return nil, err
 	}
-	defer UnlockMutex()
 
-	headerBytes, err := readSharedMemory(0, headerLength)
-	if err != nil {
-		return nil, fmt.Errorf("read HWiNFO header: %w", err)
+	if len(body) < headerLength {
+		return nil, fmt.Errorf("HWiNFO shared memory too small: got %d bytes, need at least %d", len(body), headerLength)
 	}
-	h := NewHeader(headerBytes)
+	h := NewHeader(body[:headerLength])
 	header := &h
 
 	if sig := header.Signature(); sig != signatureActive {
 		return nil, InactiveError{Signature: sig}
 	}
 
-	body, err := readSharedMemory(0, header.TotalSize())
-	if err != nil {
-		return nil, fmt.Errorf("read HWiNFO body: %w", err)
+	if want := header.TotalSize(); len(body) < want {
+		return nil, fmt.Errorf("HWiNFO shared memory truncated: got %d bytes, header claims %d", len(body), want)
 	}
 
 	return &HWiNFOShMem{
@@ -98,27 +87,6 @@ func parseReadings(header *Header, body []byte) []Reading {
 		readings = append(readings, NewReading(body[start:start+size]))
 	}
 	return readings
-}
-
-func isAccessDeniedErr(err error) bool {
-	return fmt.Sprintf("%v", err) == "CreateFileMapping: Access is denied."
-}
-
-func readSharedMemory(start, size int) ([]byte, error) {
-	memory, err := shm.Open(C.HWiNFO_SENSORS_MAP_FILE_NAME2, int32(size))
-	if err != nil {
-		if isAccessDeniedErr(err) {
-			return nil, ErrAccessDenied
-		}
-		return nil, err
-	}
-	defer memory.Close()
-
-	bytes := make([]byte, size)
-	if _, err := memory.ReadAt(bytes, int64(start)); err != nil {
-		return nil, fmt.Errorf("read shared memory at offset %d: %w", start, err)
-	}
-	return bytes, nil
 }
 
 func (s *HWiNFOShMem) Version() string {
