@@ -4,7 +4,7 @@ package hwinfoShMem
 import "C"
 
 import (
-	"strconv"
+	"fmt"
 	"unsafe"
 )
 
@@ -45,10 +45,12 @@ func (s *Sensor) SensorInst() uint64 {
 	return uint64(s.cs.dwSensorInst)
 }
 
-// ID a unique ID combining SensorID and SensorInst
+// ID returns a unique identifier for this sensor combining SensorID and
+// SensorInst, formatted as "sensorID-sensorInst". The previous format
+// (SensorID*100 + SensorInst) collided whenever any sensor had 100 or more
+// instances; this one does not.
 func (s *Sensor) ID() string {
-	// keeping old method used in legacy steam deck plugin
-	return strconv.FormatUint(s.SensorID()*100+s.SensorInst(), 10)
+	return fmt.Sprintf("%d-%d", s.SensorID(), s.SensorInst())
 }
 
 // NameOrig original name of sensor
